@@ -1,6 +1,9 @@
 
 library(tidyverse)
 
+#Set Working Directory
+setwd("~/Documents/GitHub/ps9-joehoang1")
+
 # load in the data
 ipip <- read_csv('ipip50_sample.csv')
 
@@ -30,19 +33,18 @@ ipip <- read_csv('ipip50_sample.csv')
 # columns for different measures) and we need it in long format. Convert
 # to long format with a gather command on the trait items (A_1...O_10):
 # **HINT: The long format data set should have 42000 rows**
-ipip.l <- ipip %>% 
-  ...
+names(ipip)
+ipip.l <- ipip %>% gather(Trait, Score, A_1:O_10)
 
 # We need a column that identifies rows as belonging to a specific trait,
 # but the column you created based on the trait items includes both trait
 # and item (e.g., A_1, but we want A in a separate column from item 1).
 # Make this happen with a separate command:
-ipip.l <- ipip.l %>% 
-  ...
+ipip.l <- ipip.l %>% separate(Trait, into=c('trait','Item'), sep="_")
 
 # Calculate averages for each participant (coded as RID) and trait:
-ipip.comp <- ipip.l %>% 
-  ...
+ipip.comp <- ipip.l %>%   group_by(RID,trait) %>%
+                          summarise(Avg=mean(Score))
 
 
 # Cleaning up the other variables -----------------------------------------
@@ -53,16 +55,24 @@ ipip.comp <- ipip.l %>%
 # ipip.comp tibble:
 # HINT: use a select call on ipip to only select the columns that you want to
 # merge with ipip.comp
-ipip.comp <- ipip %>% 
-  ...
+ipip.comp <- ipip %>% select('RID', 'age', 'gender', 'BMI', 'exer', 'logMedInc') %>% left_join(ipip.comp)  
+
+
 
 # One last thing, our exercise variable is all out of order. Because it was read
 # in as a character string, it is in alphabetical order. Let's turn it into a 
 # factor and reorder the levels according to increasing frequency. Do this by 
 # using the factor command and its levels argument:
-ipip.comp$exer <- ...
+
+ipip.comp$exer <- factor(ipip.comp$exer, levels=c('veryRarelyNever','less1mo','less1wk','1or2wk','3or5wk',"more5wk")) 
 
 
+#I'm a little bit confused about the wording of this section
+#I did it by the order that makes sense
+#Here is the code if I was supposed to assign the levels by frequency 
+table(ipip.comp$exer)
+#Frequency descending: less1mo, more5wk, less1wk, veryRarelyNever, 1or2wk, 3or5wk
+#ipip.comp$exer <- factor(ipip.comp$exer, levels=c('less1mo',"more5wk",less1wk','veryRarelyNever','1or2wk','3or5wk')) 
 
 # Analyze the data! -------------------------------------------------------
 
@@ -70,8 +80,12 @@ ipip.comp$exer <- ...
 # Calculate both the mean (use the new variable name 'avg') and standard error
 # of the mean (i.e., standard deviation divided by the square root of the 
 # number of participants; use variable name 'sem'):
-exer.avg <- ipip.comp %>% 
-  ...
+exer.avg <- ipip.comp %>% group_by(exer,trait) %>% 
+                          summarise(
+                                      n=length(RID),
+                                      avg=mean(Avg),
+                                      sem=sd(Avg)/sqrt(n-1))
+
 
 # If you properly created the exer.avg tibble above, the following code will 
 # create a plot and save it as figures/exer.pdf. Check your figure with 
@@ -85,8 +99,11 @@ ggsave('figures/exer.pdf',units='in',width=7,height=5)
 
 
 # repeat the above summary commands for gender:
-gender.avg <- ipip.comp %>% 
-  ...
+gender.avg <- ipip.comp %>% group_by(gender,trait) %>% 
+                            summarise(
+                                      n=length(RID),
+                                      avg=mean(Avg),
+                                      sem=sd(Avg)/sqrt(n-1))
 
 # create a gender plot and compare to the answer figure:
 ggplot(gender.avg,aes(x=trait,y=avg,colour=gender))+
@@ -102,14 +119,19 @@ ggsave('figures/gender.pdf',units='in',width=5,height=5)
 # <18.5=underweight, 18.5-25=healthy, 25-30=overweight, >30=obese
 # HINT: check out the case_when function:
 #     https://dplyr.tidyverse.org/reference/case_when.html
-ipip.comp <- ipip.comp %>% 
-  ...
+
+#Decided to use the mutate function instead!  
+ipip.comp <- ipip.comp %>% mutate(BMI.1=cut(BMI, breaks=c(-Inf, 18, 25, 30, Inf), 
+                                                     labels=c('underweight','healthy','overweight','obese')))
 # turn BMI_cat into a factor and order it with levels
-ipip.comp$BMI_cat <- ...
+ipip.comp$BMI_cat <- factor(ipip.comp$BMI.1, levels=c('underweight','healthy','overweight','obese')) 
 
 # summarise trait values by BMI categories  
-bmi.avg <- ipip.comp %>% 
-  ...  
+bmi.avg <- ipip.comp %>% group_by(BMI_cat,trait) %>% 
+                                                summarise(
+                                                  n=length(RID),
+                                                  avg=mean(Avg),
+                                                  sem=sd(Avg)/sqrt(n-1))
 
 # create BMI plot and compare to the answer figure:
 ggplot(bmi.avg,aes(x=trait,y=avg,colour=BMI_cat))+
@@ -122,8 +144,14 @@ ggsave('figures/BMI.pdf',units='in',width=7,height=5)
 # finally, use dplyr to calculate the correlation (use variable name 'corrcoef') 
 # between age and the big 5
 # NOTE: check out the cor() function by running ?cor in the console
-age.avg <- ipip.comp %>% 
-  ...
+computecor <- ipip.comp %>% spread(trait, Avg) %>%
+                         select(age, A, C, E, N, O) %>% 
+                         cor()
+computecor
+
+trait <- c("A","C","E","N","O")
+corrcoef <- c(0.03472169,0.10897987,0.04111074,-0.1239703,-0.005111711)
+age.avg <- data.frame(trait, corrcoef)
 
 # create age plot and compare to the answer figure
 ggplot(age.avg,aes(x=trait,y=corrcoef))+
@@ -131,6 +159,7 @@ ggplot(age.avg,aes(x=trait,y=corrcoef))+
   geom_point(size=3)+
   labs(x='big 5 trait',y='correlation between trait and age',title='Big 5 and age')
 ggsave('figures/age.pdf',units='in',width=4,height=5)
+
 
 
 
